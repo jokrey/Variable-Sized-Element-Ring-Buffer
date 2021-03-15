@@ -1,7 +1,5 @@
 package jokrey.utilities.ring_buffer.network_bridge.stack;
 
-import jokrey.utilities.debug_analysis_helper.TimeDiffMarker;
-import jokrey.utilities.encoder.as_union.li.bytes.MessageEncoder;
 import jokrey.utilities.network.link2peer.P2LNode;
 import jokrey.utilities.network.link2peer.P2Link;
 import jokrey.utilities.simple.data_structure.stack.Stack;
