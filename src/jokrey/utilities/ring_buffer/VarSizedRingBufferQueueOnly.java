@@ -25,6 +25,10 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * Assumptions:
  *  Max bytes are readily available. The buffer is not optimized towards setting the content below max, after using it.
  *  Occasionally it has to, but usually it does not
+ *
+ * todo(possible):
+ *   - could cache num elements on commit in attemptedWriteStart position - on crash it could be loaded lazily
+ *   - definitely could, possibly should store the max in the header
  */
 public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
     protected long max;
@@ -35,6 +39,7 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
     protected final ReentrantReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     /**
+     * Initialized from given storage, doing recovery if so required.
      * @param storage must be editable,
      *                for atomicity of this buffer it must support atomicity of
      *                {@link TransparentBytesStorage#set(long, byte[]...)} and {@link TransparentBytesStorage#delete(long, long)} and {@link TransparentBytesStorage#setContent(Object)}
@@ -55,10 +60,7 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
 
     /**
      * Can be used to secure an iteration
-     * Will upgrade to writeLock for the minimal time if a write operation occurs within this read.
-     * After the write operation, continuing iteration might not be possible (the internal pointers used may have become invalid)
-     *   Failed iteration is not necessarily detectable.
-     *   Therefore write operations should generally be the last thing to occur in this op.
+     * Cannot use write operations on this vsrb from within the runnable (thanks to java's terrible rrwl)
      * @param r operations or iterations to run
      */
     public void read(Runnable r) {
@@ -72,10 +74,9 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
 
     /**
      * Append the given element to the end of this buffer,
-     *   the new element will be overwritten later than any other elements previously in the buffer
+     *   the new element will be overwritten later than any other elements previously in the buffer (unless deleted)
+     * This append might override data, if we reached the maximum before or now.
      * @return false if the element was too large to be added, true otherwise
-     * @throws IllegalArgumentException if given element does not fit buffer(i.e. max < START + li(e) + |e|)
-     * @throws IllegalStateException if the underlying data is corrupt and does not represent a vsrb
      */
     public boolean append(byte[] e) {
         rwLock.writeLock().lock();
@@ -134,7 +135,10 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
     }
 
     /**
-     * @return whether anything was deleted (only nothing deleted if empty)
+     * Deletes the first/earliest element added to this vsrb.
+     * Since we don't know the relativity of the size of the deleted element and the size of future elements,
+     *   we will continue writing at the end of the underlying storage, before using the freed up space (which would override data sooner).
+     * @return whether an element was deleted, only false if isEmpty
      */
     public boolean deleteFirst() {
         rwLock.writeLock().lock();
@@ -174,9 +178,7 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
         }
     }
 
-    /**
-     * Clears this buffer, might change the size of the underlying storage.
-     */
+    /** Clears this buffer, might change the size of the underlying storage. */
     public void clear() {
         rwLock.writeLock().lock();
         try {
@@ -191,10 +193,11 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
     }
 
     /**
-     * TODO - this is not thread safe...
-     *      Any single read operation will be read locked.
-     *      BUT, the pointer location might be invalid as heck, if we come to it again after a write.
-     *      This is NOT necessarily even detected (could be valid(ish) coincidentally -> return junk data)
+     * This is not thread safe...
+     *   Any single read operation will be read locked.
+     *   BUT, the pointer location might be invalid as heck, if we come to it again after a write.
+     *   This is NOT necessarily even detected:
+     *     Could be valid(ish) coincidentally -> but return junk data, or A-B-A problem
      * @return an extended iterator capable of next, hasNext and skip (delete is not supported)
      */
     public ExtendedIterator<byte[]> iterator() {
@@ -299,6 +302,13 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
         if(max < newMax) grow(newMax);
         shrink(newMax);
     }
+    /**
+     * Will set the max to newMax, doing nothing else.
+     * Since no data will be reordered, it is perfectly possible that all current elements will be overridden until we start writing over newMax
+     *    if we wrapped before grow(which is likely)
+     * @param newMax new maximum storage size, larger than current
+     * @throws IllegalArgumentException if newMax < max
+     */
     public void grow(int newMax) {
         if(max == newMax) return;
         if(max > newMax) throw new IllegalArgumentException("cannot grow to smaller max: max("+max+"), newMax("+newMax+")");
@@ -444,7 +454,6 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
 
     /**
      * Calculates size by iteration, should be considered costly
-     * (todo could cache num elements on commit in attemptedWriteStart position - on crash it could be loaded lazily)
      * @return the number of elements currently accessible by the iterator.
      */
     public int size() {

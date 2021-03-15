@@ -14,15 +14,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @see VarSizedRingBufferQueueOnly, but extends functionality by {@link Stack} operations.
  *
  * Makes it a double linked list and twice as many organisational information per element (one more reverse-li)
- *
- *
- * todo: reverse iteration (
- *    - done by adding a reverse li(leading_li must be at the end) to the end (double linked)
- *    - start point of reverse iteration is drStart(because just before that will be the reverse-li)
- *  )
- *  todo delete latest
- *
- *  todo endless bidirectional iterator
  */
 public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements Stack<byte[]> {
     /**
@@ -66,7 +57,6 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
                     return !wrapReadAllowed.get();
                 }
                 boolean reachedEnd() {
-//                    VSBRDebugPrint.printMemoryLayout(VarSizedRingBuffer.this, storage, String::new, false);
                     if(!alreadyWrapped()) return false;
                     if(drStart <= drEnd) return iter.pointer == drEnd; //[e1S, e1E, drStart, ..., drEnd, e2S, e2E] //after wrap we stop at end
                     else if(drStart == oldContentSize) return iter.pointer == drStart; //[0, drEnd, e2S, e2E, drStart] //e1 deleted, after wrap we instantly stop
@@ -83,14 +73,10 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
                 }
 
                 @Override public boolean hasNext () {
-//                    System.out.println("VarSizedRingBuffer.hasNext");
                     rwLock.readLock().lock();
                     try {
-//                        System.out.println("iter.pointer = " + iter.pointer);
                         if(reachedEnd()) return false;
-//                        System.out.println("1");
                         if(!mustWrap() && iter.hasNext(storage)) return true;
-//                        System.out.println("2");
                         return (drStart != oldContentSize && drEnd != oldContentSize) && new ReverseLIPosition(oldContentSize, START).hasNext(storage);
                     } catch (StorageSystemException e) {
                         throw new NoSuchElementException("Internal Storage System Exception of sorts("+e.getMessage()+"). Kinda indicates no such element");
@@ -151,6 +137,10 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
         }
     }
 
+    /**
+     * Deletes the last/latest element added to this vsrb.
+     * @return whether an element was deleted, only false if isEmpty
+     */
     public boolean deleteLast() {
         rwLock.writeLock().lock();
         try {
@@ -227,6 +217,10 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
 
     //ADDITIONAL, SECONDARY FUNCTIONALITY - build from above
 
+    /**
+     * Uses a read locked reverse iterator to take the last/latest element added to this vsrb
+     * @see #reverseIterator()
+     */
     public byte[] last() {
         rwLock.readLock().lock();
         try {
@@ -245,6 +239,11 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
         super.append(bytes);
     }
 
+    /**
+     * Delete and return last element, or null
+     * @see #last()
+     * @see #deleteLast()
+     */
     @Override public byte[] pop() {
         rwLock.writeLock().lock();//thank java, it does not support upgradable read-write-locks
         try {
@@ -257,6 +256,7 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
         }
     }
 
+    /** @see #last() */
     @Override public byte[] top() {
         return last();
     }

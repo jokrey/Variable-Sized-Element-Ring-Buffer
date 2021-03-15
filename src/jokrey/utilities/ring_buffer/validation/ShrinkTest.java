@@ -23,7 +23,7 @@ public class ShrinkTest {
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Arrays.asList("1", "2", "3"));
 
-        vsrb.shrink(START + 11);
+        vsrb.reMax(START + 11);
 
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Arrays.asList("1", "2"));
@@ -42,7 +42,7 @@ public class ShrinkTest {
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Arrays.asList("2", "3", "4"));
 
-        vsrb.shrink(START + 12);
+        vsrb.reMax(START + 12);
 
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Collections.singletonList("4"));//note: we must also delete 2, because 3 was added after
@@ -74,7 +74,7 @@ public class ShrinkTest {
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Arrays.asList("3", "4"));
 
-        vsrb.shrink(START + 12);
+        vsrb.reMax(START + 12);
 
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Collections.singletonList("4"));
@@ -96,7 +96,7 @@ public class ShrinkTest {
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Arrays.asList("2", "3"));
 
-        vsrb.shrink(START + 12);
+        vsrb.reMax(START + 12);
 
         VSBRDebugPrint.printMemoryLayout(vsrb, store, String::new, false);
         VSRBTests.check(vsrb, Collections.singletonList("2"));
