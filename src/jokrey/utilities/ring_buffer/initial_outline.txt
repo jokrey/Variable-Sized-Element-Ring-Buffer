@@ -68,7 +68,7 @@ Variable Size Ring Buffer List
          Read cole, jump from li-entry to li-entry, until li-entry-start == lwl
             Of real-eof, read next li from start(16)
 
-    Delete earliest (not strictly required right now, but todo)
+    Delete earliest (not strictly required right now)
         Read cole
         Read LI at cole
         WriteCole(cole + li)
@@ -76,4 +76,4 @@ Variable Size Ring Buffer List
     Grow n (not strictly required right now, but todo)
         Easy, no? Just do it, and continue writing. May overwrite some stuff at first, but eventually will start reaching that
     Shrink n
-       Not possible?
+       truncateToLwl, and further below new-n

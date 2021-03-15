@@ -27,7 +27,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  *  Occasionally it has to, but usually it does not
  */
 public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
-    public final long max;
+    protected long max;
+    public long getMax() { return max; }
 
     protected final TransparentBytesStorage storage;
 
@@ -286,6 +287,33 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
         }
     }
 
+
+    /**
+     * Will change the max, growing or shrinking the underlying storage system.
+     * growing will not change anything, shrinking will potentially perform some iteration and might delete some of the earliest data.
+     * @param newMax new maximum storage size
+     * @throws IllegalArgumentException if newMax < START
+     */
+    public void reMax(int newMax) {
+        if(max == newMax) return;
+        if(max < newMax) grow(newMax);
+        shrink(newMax);
+    }
+    public void grow(int newMax) {
+        if(max == newMax) return;
+        if(max > newMax) throw new IllegalArgumentException("cannot grow to smaller max: max("+max+"), newMax("+newMax+")");
+        max = newMax;
+    }
+    public void shrink(int newMax) {
+        if(max == newMax) return;
+        if(max < newMax) throw new IllegalArgumentException("cannot shrink to larger max: max("+max+"), newMax("+newMax+")");
+        if(newMax < START) throw new IllegalArgumentException("cannot shrink below header size("+START+")");
+        if(newMax == START) {
+            clear();
+            return;
+        }
+        throw new UnsupportedOperationException("shrink cannot be efficiently implemented without reverse iteration");
+    }
 
 
 

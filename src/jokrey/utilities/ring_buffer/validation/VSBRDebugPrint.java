@@ -20,7 +20,7 @@ public class VSBRDebugPrint {
         long attemptedWriteStart = BitHelper.getInt64From(headerBytes, 16);
         long attemptedWriteEnd = BitHelper.getInt64From(headerBytes, 24);
 
-        System.out.println("\n"+ident+" - PRINTING RING BUFFER(max="+vsrb.max+")");
+        System.out.println("\n"+ident+" - PRINTING RING BUFFER(max="+vsrb.getMax()+")");
         System.out.println("drStart = " + drStart);
         System.out.println("drEnd = " + drEnd);
         System.out.println("attemptedWriteStart = " + attemptedWriteStart);
@@ -30,7 +30,7 @@ public class VSBRDebugPrint {
         System.out.println("dirty region bounds = ["+drStart+", "+drEnd+"]");
         System.out.println("dirty region size = "+dirtyRegionSize);
         if(drEnd == underlyingStorageOfVSBR.contentSize())
-            System.out.println("remaining space without new override = " + (dirtyRegionSize + (vsrb.max - drEnd)));
+            System.out.println("remaining space without new override = " + (dirtyRegionSize + (vsrb.getMax() - drEnd)));
         else
             System.out.println("remaining space without new override = " + dirtyRegionSize);
         System.out.println("max single element size = " + vsrb.calculateMaxSingleElementSize());
@@ -67,7 +67,7 @@ public class VSBRDebugPrint {
 
         StringBuilder builder = new StringBuilder();
         builder.append("memoryLayout(")
-               .append(underlyingStorageOfVSBR.contentSize() - convSub).append("/").append(vsrb.max - convSub)
+               .append(underlyingStorageOfVSBR.contentSize() - convSub).append("/").append(vsrb.getMax() - convSub)
                .append("): ")
                .append(drS - convSub).append(",").append(drE - convSub)
                .append("{");

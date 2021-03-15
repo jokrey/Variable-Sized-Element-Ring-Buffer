@@ -182,7 +182,7 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
                     //if there is a dirty region between START and drEnd
                     drStart = newDrStart;
                     truncateToDirtyRegionStart();//if it crashes after here we are fine.. drStart and drEnd are on restart constrained to contentSize and both drEnd and drStart are >= on disk
-                    newDrEnd = Math.min(drStart, drEnd);//done internally to drEnd by truncateToDirtyRegionStart, but would be overriden by commit
+                    newDrEnd = Math.min(drStart, drEnd);//done internally to drEnd by truncateToDirtyRegionStart, but would be overridden by commit
                 }
                 commit(newDrStart, newDrEnd);
             }
@@ -192,8 +192,36 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
         }
     }
 
+    @Override public void shrink(int newMax) {
+        if(max == newMax) return;
+        if(max < newMax) throw new IllegalArgumentException("cannot shrink to larger max: max("+max+"), newMax("+newMax+")");
+        if(newMax < START) throw new IllegalArgumentException("cannot shrink below header size("+START+")");
+        if(newMax == START) {
+            clear();
+            return;
+        }
 
+        drStart = searchNextLIStartBefore(drStart, newMax);
+        truncateToDirtyRegionStart();
+        commit(drStart, Math.min(drStart, drEnd)); // if we crash before here, this would be replicated by recovery
+        max = newMax;
+    }
 
+    protected long searchNextLIStartBefore(long startAt, long maxResult) {
+        if(maxResult <= START) {
+            return START;
+        } else {
+            while (startAt > maxResult) {   // we jump from li to li, until we encompass the nextWriteEnd
+                long[] liBounds = readBackwardLIBoundsAt(startAt);
+                if (liBounds == null) {     // if we cannot read any the next li (for example == START)
+                    return maxResult;
+                } else {
+                    startAt = liBounds[0] - calculatePreLIeOffset(liBounds);
+                }
+            }
+        }
+        return startAt;
+    }
 
 
 
