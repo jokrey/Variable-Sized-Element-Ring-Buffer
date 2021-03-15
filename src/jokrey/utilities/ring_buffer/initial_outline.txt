@@ -1,0 +1,79 @@
+lwl = dirty region start
+cole = dirty region end
+
+(This entire outline is no longer up to date, the algorithms have improved slightly)
+(It nonetheless can serve as a simpler introduction and is mildly interesting in itself)
+
+Variable Size Ring Buffer List
+    Have a buffer of size n on disk with acid
+    First 8 bytes are last write location (lwl) -  Initial = 16
+         Next 8 byte are current overwrite libae end (cole) -  Initial = 16
+         (virtual:
+               first valid location = cole
+               last valid location = lwl + read-li-at-lwl
+        )
+
+    Assume atomicity of 'write' - i.e. all or nothing
+        Further assume atomicity of truncate
+
+    Write entry (append x bytes to logical eof):
+         1. Read lwl
+         2. Read cole
+         Calc new-lwl:
+         3.  new-lwl = lwl + |li(x)|
+         4.  IF (new-lwl > n)
+         5.      new-lwl = start(16) + |li(x)|
+                 If (cole > lwl)//not on recovery
+    !    6.          truncate-file to cole   (cannot use excess space anyways, cole reset required because we want to trigger line 9. check - otherwise we would skip farther than we need in line 16)
+         8. Calc cole:
+         9.  IF (cole == file-length)
+       10.      IF (new-lwl >= file-length)
+       11.          new-cole = new-lwl
+                ELSE
+                    Read li at start(16)
+                    new-cole = start(16) +li
+       12.   ELSE
+       13.      new-cole = cole
+       14.   WHILE (new-lwl >= new-cole)
+       15.      Read li at new-cole
+       16.      new-cole += li
+    !  17. Write new-cole
+    !  18. Write li(x) at new-lwl - |li(x)|!!
+    !  19. Write new-lwl
+    Crash considerations:
+       Crash before 6 - irrelevant, no changes
+       Crash between 6 and 17 (only truncated)
+           Any data after cole is virtually deleted, will start read at start(16)
+       Crash between 17 and 18 (cole written, no data written, lwl not written)
+           Gives us a larger invalidated space
+               Scenario 1 (lwl = 20, cole = 30, |li(x)| = 15):
+                   "to be written exceeds current cole block"
+                   new-cole = 40, lost data between 30 and 40, but rest fine
+               Scenario 2 (lwl = 60, cole = 70, file-length = 70(trunced), n=80, |li(x)=30)
+                  "next write wraps around"
+                  new-cole = 50, lost data between 16 and 50
+                       Write: lwl calc is repeated - same conclusion
+                                  cole calc is repeated - no if hits anymore
+                       Read: will start read at 50, and read to 60(old lwl, which was valid
+         Crash between 18 and 19 (write data but not lwl)
+             Write lost, rest fine
+             Lucky: we will only write into junk space anyway.
+             Because the new-cole commit has already reliably reserved that space
+         Crash after 19 - irrelevant
+
+
+    Read entire file(iterator):
+         IF cole == file-length: cole=start(16)
+             If crash between trunc and write cole
+         Read cole, jump from li-entry to li-entry, until li-entry-start == lwl
+            Of real-eof, read next li from start(16)
+
+    Delete earliest (not strictly required right now, but todo)
+        Read cole
+        Read LI at cole
+        WriteCole(cole + li)
+
+    Grow n (not strictly required right now, but todo)
+        Easy, no? Just do it, and continue writing. May overwrite some stuff at first, but eventually will start reaching that
+    Shrink n
+       Not possible?
