@@ -7,8 +7,10 @@ import jokrey.utilities.simple.data_structure.ExtendedIterator;
 import jokrey.utilities.simple.data_structure.queue.Queue;
 import jokrey.utilities.transparent_storage.StorageSystemException;
 import jokrey.utilities.transparent_storage.bytes.TransparentBytesStorage;
+import jokrey.utilities.transparent_storage.bytes.file.FileStorage;
 import jokrey.utilities.transparent_storage.bytes.non_persistent.ByteArrayStorage;
 
+import java.io.RandomAccessFile;
 import java.util.NoSuchElementException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -40,6 +42,10 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
 
     /**
      * Initialized from given storage, doing recovery if so required.
+     *
+     * Encouraged to use with capacitated transparent storages, with internally constantly allocated size.
+     * Any {@link FileStorage} based on {@link RandomAccessFile} should use "rwd" as its mode, for improved atomicity.
+     *
      * @param storage must be editable,
      *                for atomicity of this buffer it must support atomicity of
      *                {@link TransparentBytesStorage#set(long, byte[]...)} and {@link TransparentBytesStorage#delete(long, long)} and {@link TransparentBytesStorage#setContent(Object)}
@@ -293,9 +299,12 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
 
     /**
      * Will change the max, growing or shrinking the underlying storage system.
-     * growing will not change anything, shrinking will potentially perform some iteration and might delete some of the earliest data.
+     * Growing will not change anything, shrinking will potentially perform some iteration and might delete some of the earliest data.
+     * On grow, the underlying storage must support the new size (capacitated, transparent storages might not)
      * @param newMax new maximum storage size
      * @throws IllegalArgumentException if newMax < START
+     * @see #grow(int)
+     * @see #shrink(int)
      */
     public void reMax(int newMax) {
         if(max == newMax) return;
@@ -306,6 +315,7 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
      * Will set the max to newMax, doing nothing else.
      * Since no data will be reordered, it is perfectly possible that all current elements will be overridden until we start writing over newMax
      *    if we wrapped before grow(which is likely)
+     * The underlying storage must support the new size (capacitated, transparent storages might not)
      * @param newMax new maximum storage size, larger than current
      * @throws IllegalArgumentException if newMax < max
      */
