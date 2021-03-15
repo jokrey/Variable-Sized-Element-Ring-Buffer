@@ -5,12 +5,13 @@ import jokrey.utilities.network.link2peer.P2Link;
 import jokrey.utilities.network.link2peer.node.conversation.P2LConversation;
 import jokrey.utilities.simple.data_structure.stack.Stack;
 
+import java.io.Closeable;
 import java.io.IOException;
 
 /**
  * RemoteStack client using P2Link, experimental, error handling, async support and large element support problematic
  */
-public class RemoteStack implements Stack<byte[]> {
+public class RemoteStack implements Closeable, Stack<byte[]> {
     public static final int PUSH_TYPE = 1;
     public static final int POP_TYPE = 2;
     public static final int TOP_TYPE = 3;
@@ -24,6 +25,10 @@ public class RemoteStack implements Stack<byte[]> {
         boolean success = node.establishConnection(remote).get(3000);
         if(!success) throw new IOException("Could not connect after 3 seconds");
         this.remote = remote;
+    }
+
+    @Override public void close() {
+        node.close();
     }
 
     @Override public void push(byte[] bytes) {
