@@ -218,14 +218,14 @@ public class VarSizedRingBuffer extends VarSizedRingBufferQueueOnly implements S
     }
 
     @Override public byte[] pop() {
-        rwLock.readLock().lock();
+        rwLock.writeLock().lock();//thank java, it does not support upgradable read-write-locks
         try {
             byte[] bytes = last();//this is efficient enough, the calculations are very different and io is bottleneck
             if(bytes!=null)
                 deleteLast();
             return bytes;
         } finally {
-            rwLock.readLock().unlock();
+            rwLock.writeLock().unlock();
         }
     }
 

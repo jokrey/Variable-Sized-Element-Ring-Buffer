@@ -467,14 +467,14 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
      * @return the removed elements
      */
     @Override public byte[] dequeue() {
-        rwLock.readLock().lock();
+        rwLock.writeLock().lock();//thank java, it does not support upgradable read-write-locks
         try {
             byte[] bytes = first();//this is efficient enough, the calculations are very different and io is bottleneckif(bytes!=null)
             if(bytes!=null)
-                deleteFirst();//upgrades to write lock
+                deleteFirst();
             return bytes;
         } finally {
-            rwLock.readLock().unlock();
+            rwLock.writeLock().unlock();
         }
     }
 
