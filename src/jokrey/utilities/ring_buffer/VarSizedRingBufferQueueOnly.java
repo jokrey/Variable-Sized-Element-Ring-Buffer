@@ -50,8 +50,9 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
      *                for atomicity of this buffer it must support atomicity of
      *                {@link TransparentBytesStorage#set(long, byte[]...)} and {@link TransparentBytesStorage#delete(long, long)} and {@link TransparentBytesStorage#setContent(Object)}
      *                Further constrained:
-     *                  - set must only be atomic for at == 0 (because only header set must be atomic)
-     *                  - delete must only be atomic for to == contentSize (because only used for truncations)
+     *                  - set must only be atomic(all-or-nothing) for at == 0, bytes.length==32 (because only header set must be atomic)
+     *                  - delete must only be atomic for end == contentSize (because only used for truncations) - so just set-length
+     *                  - setContent must only be atomic for very small (32bytes) arrays
      * @param max max index at which data will be written to underlying storage(appends will wrap and overwrite)
      * @throws IllegalArgumentException if max < {@link VarSizedRingBufferQueueOnly#START} or max < storage.contentSize()
      */
@@ -412,31 +413,36 @@ public class VarSizedRingBufferQueueOnly implements Queue<byte[]> {
     }
 
 
+    /**Any call to this must be write locked*/
     protected void truncateToDirtyRegionStart() {
         if(drStart < storage.contentSize()) {
             storage.delete(drStart, storage.contentSize());
             drEnd = Math.min(drStart, drEnd);
         }
     }
+    private final byte[] headerCache = new byte[START];
+    /**Any call to this must be write locked*/
     protected void preCommit(long newDrEnd, long attemptedWriteStart, long attemptedWriteEnd) {
         //no need to write to instance variables - will write in post
-        storage.set(
-                0,
-                BitHelper.getBytes(drStart), BitHelper.getBytes(newDrEnd),
-                BitHelper.getBytes(attemptedWriteStart), BitHelper.getBytes(attemptedWriteEnd)
-        );
+        BitHelper.writeInt64(headerCache, 0, drStart);
+        BitHelper.writeInt64(headerCache, 8, newDrEnd);
+        BitHelper.writeInt64(headerCache, 16, attemptedWriteStart);
+        BitHelper.writeInt64(headerCache, 24, attemptedWriteEnd);
+        storage.set(0, headerCache);
     }
+    /**Any call to this must be write locked*/
     protected void writeElem(long at, byte[] e) {
         storage.set(at, LIbae.generateLI(e.length), e);
     }
+    /**Any call to this must be write locked*/
     protected void commit(long newDrStart, long newDrEnd) {
         drStart = newDrStart;
         drEnd = newDrEnd;
-        storage.set(
-                0,
-                BitHelper.getBytes(newDrStart), BitHelper.getBytes(newDrEnd),
-                BitHelper.getBytes(-1L), BitHelper.getBytes(-1L)
-        );
+        BitHelper.writeInt64(headerCache, 0, newDrStart);
+        BitHelper.writeInt64(headerCache, 8, newDrEnd);
+        BitHelper.writeInt64(headerCache, 16, -1);
+        BitHelper.writeInt64(headerCache, 24, -1);
+        storage.set(0, headerCache);
     }
     protected long lieSize(byte[] e) {
         return calculatePreLIeOffset(e.length) + e.length + calculatePostLIeOffset(e.length);
